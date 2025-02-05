@@ -1,15 +1,26 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Play, Save } from "lucide-react";
+import "../../../src/lib/ink-language";
 
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
 }
 
+interface InkError {
+  message: string;
+  line: number;
+  column: number;
+}
+
 export default function Editor({ value, onChange }: EditorProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor>();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [errors, setErrors] = useState<InkError[]>([]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -20,10 +31,18 @@ export default function Editor({ value, onChange }: EditorProps) {
       theme: "vs-dark",
       minimap: { enabled: false },
       automaticLayout: true,
+      rulers: [80],
+      scrollBeyondLastLine: false,
+      formatOnPaste: true,
+      formatOnType: true,
+      suggestOnTriggerCharacters: true,
+      wordWrap: "on",
     });
 
     editorRef.current.onDidChangeModelContent(() => {
-      onChange(editorRef.current?.getValue() || "");
+      const newValue = editorRef.current?.getValue() || "";
+      onChange(newValue);
+      validateInkScript(newValue);
     });
 
     return () => {
@@ -31,12 +50,86 @@ export default function Editor({ value, onChange }: EditorProps) {
     };
   }, []);
 
+  const validateInkScript = (script: string) => {
+    const newErrors: InkError[] = [];
+
+    // Basic validation rules
+    const lines = script.split("\n");
+    lines.forEach((line, index) => {
+      // Check for unclosed curly braces
+      const openBraces = (line.match(/\{/g) || []).length;
+      const closeBraces = (line.match(/\}/g) || []).length;
+      if (openBraces !== closeBraces) {
+        newErrors.push({
+          message: "Mismatched curly braces",
+          line: index + 1,
+          column: 1,
+        });
+      }
+
+      // Check for invalid diverts
+      const divertMatch = line.match(/->(\s*)([^\s]+)/);
+      if (divertMatch && !script.includes(`=== ${divertMatch[2]}`)) {
+        newErrors.push({
+          message: `Divert to unknown knot: ${divertMatch[2]}`,
+          line: index + 1,
+          column: divertMatch.index || 1,
+        });
+      }
+    });
+
+    setErrors(newErrors);
+
+    // Add error markers to the editor
+    const markers = newErrors.map(error => ({
+      message: error.message,
+      severity: monaco.MarkerSeverity.Error,
+      startLineNumber: error.line,
+      startColumn: error.column,
+      endLineNumber: error.line,
+      endColumn: error.column + 1,
+    }));
+
+    monaco.editor.setModelMarkers(
+      editorRef.current!.getModel()!,
+      "ink",
+      markers
+    );
+  };
+
+  const handlePlayClick = () => {
+    // TODO: Implement ink script execution preview
+  };
+
+  const handleSaveClick = () => {
+    // TODO: Implement saving ink script
+  };
+
   return (
     <div className="h-full flex flex-col">
-      <div className="p-4 border-b">
+      <div className="p-4 border-b flex items-center justify-between">
         <h2 className="font-semibold">Ink Script</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handlePlayClick}>
+            <Play className="h-4 w-4 mr-1" />
+            Preview
+          </Button>
+          <Button variant="default" size="sm" onClick={handleSaveClick}>
+            <Save className="h-4 w-4 mr-1" />
+            Save
+          </Button>
+        </div>
       </div>
-      
+
+      {errors.length > 0 && (
+        <Alert variant="destructive" className="mx-4 mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Found {errors.length} error(s) in your ink script
+          </AlertDescription>
+        </Alert>
+      )}
+
       <ScrollArea className="flex-1">
         <div ref={containerRef} className="h-full w-full" />
       </ScrollArea>
