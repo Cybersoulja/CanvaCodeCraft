@@ -17,7 +17,15 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
 
   const addScene = () => {
     const newScene = {
+      id: crypto.randomUUID(),
+      name: `Scene ${scenes.length + 1}`,
+      elements: []
+    };
+    setScenes([...scenes, newScene]);
+  };
 
+  return (
+    <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 p-2 border-b">
         <select 
           value={currentSceneId}
@@ -37,13 +45,6 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
           Add Scene
         </button>
       </div>
-
-      id: crypto.randomUUID(),
-      name: `Scene ${scenes.length + 1}`,
-      elements: []
-    };
-    setScenes([...scenes, newScene]);
-  };
 
   useEffect(() => {
     const currentScene = scenes.find(s => s.id === currentSceneId);
