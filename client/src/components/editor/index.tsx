@@ -6,6 +6,22 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Play, Save } from "lucide-react";
 import "../../../src/lib/ink-language";
 
+const SAMPLE_INK_SCRIPT = `=== start ===
+# Basic knot with choices
+Hello there! What would you like to do?
+* [Go to the garden] -> garden
+* [Stay inside] -> stay_inside
+
+=== garden ===
+You step into a beautiful garden.
+The flowers are blooming.
+-> END
+
+=== stay_inside ===
+You decide to stay indoors.
+It's cozy here.
+-> END`;
+
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -26,7 +42,7 @@ export default function Editor({ value, onChange }: EditorProps) {
     if (!containerRef.current) return;
 
     editorRef.current = monaco.editor.create(containerRef.current, {
-      value,
+      value: value || SAMPLE_INK_SCRIPT,
       language: "ink",
       theme: "vs-dark",
       minimap: { enabled: false },
@@ -81,7 +97,7 @@ export default function Editor({ value, onChange }: EditorProps) {
     setErrors(newErrors);
 
     // Add error markers to the editor
-    const markers = newErrors.map(error => ({
+    const markers = newErrors.map((error) => ({
       message: error.message,
       severity: monaco.MarkerSeverity.Error,
       startLineNumber: error.line,
