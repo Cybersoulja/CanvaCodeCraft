@@ -9,7 +9,46 @@ interface CanvasProps {
 }
 
 export default function Canvas({ onSelectElement }: CanvasProps) {
+  const [scenes, setScenes] = useState<Scene[]>([
+    { id: "1", name: "Start Scene", elements: [] }
+  ]);
+  const [currentSceneId, setCurrentSceneId] = useState("1");
   const [elements, setElements] = useState<GameElement[]>([]);
+
+  const addScene = () => {
+    const newScene = {
+
+      <div className="flex items-center gap-2 p-2 border-b">
+        <select 
+          value={currentSceneId}
+          onChange={(e) => setCurrentSceneId(e.target.value)}
+          className="p-1 rounded border"
+        >
+          {scenes.map(scene => (
+            <option key={scene.id} value={scene.id}>
+              {scene.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={addScene}
+          className="px-2 py-1 bg-primary text-primary-foreground rounded"
+        >
+          Add Scene
+        </button>
+      </div>
+
+      id: crypto.randomUUID(),
+      name: `Scene ${scenes.length + 1}`,
+      elements: []
+    };
+    setScenes([...scenes, newScene]);
+  };
+
+  useEffect(() => {
+    const currentScene = scenes.find(s => s.id === currentSceneId);
+    setElements(currentScene?.elements || []);
+  }, [currentSceneId, scenes]);
 
   const [{ isOver }, dropRef] = useDrop({
     accept: "game-element",
