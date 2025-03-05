@@ -1,8 +1,8 @@
 import { useDrop } from "react-dnd";
-import { GameElement } from "@shared/schema";
+import { GameElement, Scene } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface CanvasProps {
   onSelectElement: (element: GameElement | null) => void;
@@ -23,28 +23,6 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
     };
     setScenes([...scenes, newScene]);
   };
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 p-2 border-b">
-        <select 
-          value={currentSceneId}
-          onChange={(e) => setCurrentSceneId(e.target.value)}
-          className="p-1 rounded border"
-        >
-          {scenes.map(scene => (
-            <option key={scene.id} value={scene.id}>
-              {scene.name}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={addScene}
-          className="px-2 py-1 bg-primary text-primary-foreground rounded"
-        >
-          Add Scene
-        </button>
-      </div>
 
   useEffect(() => {
     const currentScene = scenes.find(s => s.id === currentSceneId);
@@ -68,6 +46,19 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
       };
 
       setElements([...elements, element]);
+
+      // Update the scene with the new element
+      const updatedScenes = scenes.map(scene => {
+        if (scene.id === currentSceneId) {
+          return {
+            ...scene,
+            elements: [...scene.elements, element]
+          };
+        }
+        return scene;
+      });
+
+      setScenes(updatedScenes);
     },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
@@ -76,6 +67,26 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
 
   return (
     <div className="h-full flex flex-col">
+      <div className="flex items-center gap-2 p-2 border-b">
+        <select 
+          value={currentSceneId}
+          onChange={(e) => setCurrentSceneId(e.target.value)}
+          className="p-1 rounded border"
+        >
+          {scenes.map(scene => (
+            <option key={scene.id} value={scene.id}>
+              {scene.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={addScene}
+          className="px-2 py-1 bg-primary text-primary-foreground rounded"
+        >
+          Add Scene
+        </button>
+      </div>
+
       <div className="flex-1 relative overflow-hidden" ref={dropRef}>
         <div 
           className={cn(
@@ -99,6 +110,7 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
                 <p style={{
                   fontSize: element.properties.fontSize,
                   color: element.properties.color,
+                  padding: "8px"
                 }}>
                   {element.properties.text}
                 </p>

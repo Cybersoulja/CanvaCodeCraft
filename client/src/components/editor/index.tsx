@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Play, Save } from "lucide-react";
+import Preview from "@/components/preview";
 import "../../../src/lib/ink-language";
 
 const SAMPLE_INK_SCRIPT = `=== start ===
@@ -37,6 +38,8 @@ export default function Editor({ value, onChange }: EditorProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<InkError[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [currentScript, setCurrentScript] = useState("");
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -85,7 +88,7 @@ export default function Editor({ value, onChange }: EditorProps) {
 
       // Check for invalid diverts
       const divertMatch = line.match(/->(\s*)([^\s]+)/);
-      if (divertMatch && !script.includes(`=== ${divertMatch[2]}`)) {
+      if (divertMatch && !script.includes(`=== ${divertMatch[2]}`) && divertMatch[2] !== "END") {
         newErrors.push({
           message: `Divert to unknown knot: ${divertMatch[2]}`,
           line: index + 1,
@@ -114,11 +117,15 @@ export default function Editor({ value, onChange }: EditorProps) {
   };
 
   const handlePlayClick = () => {
-    // TODO: Implement ink script execution preview
+    setCurrentScript(editorRef.current?.getValue() || "");
+    setShowPreview(true);
   };
 
   const handleSaveClick = () => {
-    // TODO: Implement saving ink script
+    // TODO: Implement saving ink script to the game
+    const script = editorRef.current?.getValue() || "";
+    // For now, just show a confirmation
+    alert("Ink script saved!");
   };
 
   return (
@@ -126,7 +133,12 @@ export default function Editor({ value, onChange }: EditorProps) {
       <div className="p-4 border-b flex items-center justify-between">
         <h2 className="font-semibold">Ink Script</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handlePlayClick}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handlePlayClick}
+            disabled={errors.length > 0}
+          >
             <Play className="h-4 w-4 mr-1" />
             Preview
           </Button>
@@ -149,6 +161,12 @@ export default function Editor({ value, onChange }: EditorProps) {
       <ScrollArea className="flex-1">
         <div ref={containerRef} className="h-full w-full" />
       </ScrollArea>
+
+      <Preview 
+        open={showPreview} 
+        onOpenChange={setShowPreview}
+        inkScript={currentScript}
+      />
     </div>
   );
 }

@@ -1,14 +1,29 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GameElement } from "@shared/schema";
+import { useState, useEffect } from "react";
 
 interface PropertiesProps {
   selectedElement: GameElement | null;
+  inkVariables?: string[];
+  onElementUpdate?: (element: GameElement) => void;
 }
 
-export default function Properties({ selectedElement }: PropertiesProps) {
-  if (!selectedElement) {
+export default function Properties({ 
+  selectedElement, 
+  inkVariables = ["visit_garden", "open_door", "pick_item"], 
+  onElementUpdate
+}: PropertiesProps) {
+  const [element, setElement] = useState<GameElement | null>(null);
+
+  useEffect(() => {
+    setElement(selectedElement);
+  }, [selectedElement]);
+
+  if (!element) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground">
         Select an element to edit its properties
@@ -16,88 +31,177 @@ export default function Properties({ selectedElement }: PropertiesProps) {
     );
   }
 
+  const handleChange = (key: string, value: any) => {
+    const updated = { ...element };
+
+    if (key.includes('.')) {
+      // Handle nested properties
+      const [parent, child] = key.split('.');
+      updated.properties = {
+        ...updated.properties,
+        [child]: value
+      };
+    } else {
+      // Handle top-level properties
+      (updated as any)[key] = value;
+    }
+
+    setElement(updated);
+    if (onElementUpdate) {
+      onElementUpdate(updated);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b">
         <h2 className="font-semibold">Properties</h2>
       </div>
-      
+
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           <div className="space-y-2">
             <Label>Position X</Label>
             <Input 
               type="number" 
-              value={selectedElement.x}
-              onChange={() => {}}
+              value={element.x}
+              onChange={(e) => handleChange('x', parseInt(e.target.value))}
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label>Position Y</Label>
             <Input 
               type="number" 
-              value={selectedElement.y}
-              onChange={() => {}}
+              value={element.y}
+              onChange={(e) => handleChange('y', parseInt(e.target.value))}
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label>Width</Label>
             <Input 
               type="number" 
-              value={selectedElement.width}
-              onChange={() => {}}
+              value={element.width}
+              onChange={(e) => handleChange('width', parseInt(e.target.value))}
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label>Height</Label>
             <Input 
               type="number" 
-              value={selectedElement.height}
-              onChange={() => {}}
+              value={element.height}
+              onChange={(e) => handleChange('height', parseInt(e.target.value))}
             />
           </div>
-          
-          {selectedElement.type === "text" && (
+
+          {element.type === "text" && (
             <>
               <div className="space-y-2">
                 <Label>Text</Label>
-                <Input 
-                  value={selectedElement.properties.text}
-                  onChange={() => {}}
+                <Textarea 
+                  value={element.properties.text || ""}
+                  onChange={(e) => handleChange('properties.text', e.target.value)}
+                  rows={3}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>Font Size</Label>
                 <Input 
                   type="number"
-                  value={selectedElement.properties.fontSize}
-                  onChange={() => {}}
+                  value={element.properties.fontSize || 16}
+                  onChange={(e) => handleChange('properties.fontSize', parseInt(e.target.value))}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ink Variable Binding (Dynamic Text)</Label>
+                <Select 
+                  value={element.properties.inkVariable || ""} 
+                  onValueChange={(value) => handleChange('properties.inkVariable', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select variable" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {inkVariables.map(variable => (
+                      <SelectItem key={variable} value={variable}>
+                        {variable}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Content will update based on the ink variable value
+                </p>
               </div>
             </>
           )}
-          
-          {selectedElement.type === "button" && (
+
+          {element.type === "button" && (
+            <>
+              <div className="space-y-2">
+                <Label>Button Text</Label>
+                <Input 
+                  value={element.properties.text || ""}
+                  onChange={(e) => handleChange('properties.text', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Action on Click</Label>
+                <Select 
+                  value={element.properties.onClick || ""} 
+                  onValueChange={(value) => handleChange('properties.onClick', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {inkVariables.map(variable => (
+                      <SelectItem key={variable} value={variable}>
+                        {variable}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This will trigger the selected ink function when clicked
+                </p>
+              </div>
+            </>
+          )}
+
+          {element.type === "image" && (
             <div className="space-y-2">
-              <Label>Button Text</Label>
+              <Label>Image URL</Label>
               <Input 
-                value={selectedElement.properties.text}
-                onChange={() => {}}
+                value={element.properties.imageUrl || ""}
+                onChange={(e) => handleChange('properties.imageUrl', e.target.value)}
               />
             </div>
           )}
-          
+
           <div className="space-y-2">
             <Label>Color</Label>
-            <Input 
-              type="color"
-              value={selectedElement.properties.color}
-              onChange={() => {}}
-            />
+            <div className="flex gap-2">
+              <Input 
+                type="color"
+                value={element.properties.color || "#000000"}
+                onChange={(e) => handleChange('properties.color', e.target.value)}
+                className="w-12 h-10 p-1"
+              />
+              <Input 
+                type="text"
+                value={element.properties.color || "#000000"}
+                onChange={(e) => handleChange('properties.color', e.target.value)}
+                className="flex-1"
+              />
+            </div>
           </div>
         </div>
       </ScrollArea>

@@ -37,6 +37,7 @@ export type ElementProperties = {
   color?: string;
   imageUrl?: string;
   onClick?: string;
+  inkVariable?: string;
 };
 
 export const insertGameSchema = createInsertSchema(games);
