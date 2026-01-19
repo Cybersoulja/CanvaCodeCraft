@@ -2,12 +2,13 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
-import { Plus, Play, Save, Settings } from "lucide-react";
+import { Plus, Play, Save, Settings, Download } from "lucide-react";
 import Canvas from "@/components/canvas";
 import Library from "@/components/library";
 import Properties from "@/components/properties";
 import Editor from "@/components/editor";
 import Preview from "@/components/preview";
+import ExportDialog from "@/components/export";
 import { useState, useEffect } from "react";
 import { GameElement, Scene, Game } from "@shared/schema";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ export default function Workspace() {
   ]);
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [inkVariables, setInkVariables] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -129,11 +131,15 @@ export default function Workspace() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handlePlayGame}>
               <Play className="h-4 w-4 mr-1" />
-              Preview Game
+              Preview
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowExport(true)}>
+              <Download className="h-4 w-4 mr-1" />
+              Export
             </Button>
             <Button variant="default" size="sm" onClick={handleSaveGame}>
               <Save className="h-4 w-4 mr-1" />
-              Save Game
+              Save
             </Button>
           </div>
         </header>
@@ -185,6 +191,14 @@ export default function Workspace() {
           onOpenChange={setShowPreview}
           inkScript={inkCode}
           gameElements={scenes.flatMap(scene => scene.elements)}
+        />
+
+        <ExportDialog
+          open={showExport}
+          onOpenChange={setShowExport}
+          inkScript={inkCode}
+          scenes={scenes}
+          gameName={currentGame?.name || "my-game"}
         />
       </div>
     </DndProvider>
