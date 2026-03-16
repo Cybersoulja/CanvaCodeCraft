@@ -5,21 +5,7 @@ import { Download, FileCode, FileJson, FileArchive, Globe } from "lucide-react";
 import { GameElement, Scene } from "@shared/schema";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, (m) => map[m]);
-}
-
-function escapeAttr(text: string): string {
-  return escapeHtml(text).replace(/\n/g, '&#10;');
-}
+import { escapeHtml, escapeAttr } from "@/lib/export-utils";
 
 interface ExportDialogProps {
   open: boolean;
