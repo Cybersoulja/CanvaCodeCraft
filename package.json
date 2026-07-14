@@ -1,18 +1,8 @@
 {
-  "name": "canva-code-craft",
+  "name": "rest-express",
   "version": "1.0.0",
-  "private": true,
-  "description": "A Canva-style visual studio for creating interactive fiction games with Ink.",
   "type": "module",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Cybersoulja/CanvaCodeCraft.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Cybersoulja/CanvaCodeCraft/issues"
-  },
-  "homepage": "https://github.com/Cybersoulja/CanvaCodeCraft#readme",
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
