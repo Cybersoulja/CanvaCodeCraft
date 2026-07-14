@@ -57,7 +57,7 @@
     "express-session": "^1.18.1",
     "framer-motion": "^11.13.1",
     "inkjs": "^2.3.1",
-    "input-otp": "^1.4.2",
+    "input-otp": "^1.2.4",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "monaco-editor": "^0.52.2",
