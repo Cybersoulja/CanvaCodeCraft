@@ -1,8 +1,18 @@
 {
-  "name": "rest-express",
+  "name": "canva-code-craft",
   "version": "1.0.0",
+  "private": true,
+  "description": "A Canva-style visual studio for creating interactive fiction games with Ink.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cybersoulja/CanvaCodeCraft.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Cybersoulja/CanvaCodeCraft/issues"
+  },
+  "homepage": "https://github.com/Cybersoulja/CanvaCodeCraft#readme",
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
@@ -57,7 +67,7 @@
     "express-session": "^1.18.1",
     "framer-motion": "^11.13.1",
     "inkjs": "^2.3.1",
-    "input-otp": "^1.2.4",
+    "input-otp": "^1.4.2",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "monaco-editor": "^0.52.2",
