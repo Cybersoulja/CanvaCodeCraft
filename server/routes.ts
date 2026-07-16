@@ -185,7 +185,12 @@ export function registerRoutes(app: Express) {
         return;
       }
 
-      if (typeof content !== "string" || content.length === 0 || content.length > MAX_EXPORT_SIZE) {
+      const contentRequired = format !== "ink"; // an empty .ink script is a valid export
+      if (
+        typeof content !== "string" ||
+        (contentRequired && content.length === 0) ||
+        content.length > MAX_EXPORT_SIZE
+      ) {
         res.status(400).json({ message: "Invalid export content" });
         return;
       }

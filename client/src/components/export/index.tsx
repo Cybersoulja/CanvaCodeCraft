@@ -52,6 +52,13 @@ export default function ExportDialog({
   const { data: exportHistory = [] } = useQuery<ExportJobSummary[]>({
     queryKey: historyQueryKey,
     enabled: !!gameId && open,
+    refetchInterval: (query) => {
+      const jobs = query.state.data;
+      const hasActiveJob = jobs?.some(
+        (job) => job.status === "pending" || job.status === "processing"
+      );
+      return hasActiveJob ? POLL_INTERVAL_MS : false;
+    },
   });
 
   const pollExportJob = async (id: number): Promise<ExportJobSummary> => {
