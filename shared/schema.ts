@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -13,6 +13,19 @@ export const gameElements = pgTable("game_elements", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(), // button, image, text
   properties: jsonb("properties").$type<ElementProperties>().notNull(),
+});
+
+export const exportJobs = pgTable("export_jobs", {
+  id: serial("id").primaryKey(),
+  gameId: integer("game_id"),
+  format: text("format").notNull(), // json | ink | html | zip
+  status: text("status").notNull().default("pending"), // pending | processing | completed | failed
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileData: text("file_data"), // base64-encoded file content, set once completed
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
 });
 
 export type Scene = {
@@ -47,3 +60,8 @@ export type InsertGame = z.infer<typeof insertGameSchema>;
 export type InsertGameElement = z.infer<typeof insertGameElementSchema>;
 export type Game = typeof games.$inferSelect;
 export type GameElementModel = typeof gameElements.$inferSelect;
+
+export type ExportFormat = "json" | "ink" | "html" | "zip";
+export type ExportStatus = "pending" | "processing" | "completed" | "failed";
+export type ExportJob = typeof exportJobs.$inferSelect;
+export type NewExportJob = typeof exportJobs.$inferInsert;

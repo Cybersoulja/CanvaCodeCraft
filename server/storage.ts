@@ -1,6 +1,16 @@
-import { games, gameElements, type Game, type GameElementModel, type InsertGame, type InsertGameElement } from "@shared/schema";
+import {
+  games,
+  gameElements,
+  exportJobs,
+  type Game,
+  type GameElementModel,
+  type InsertGame,
+  type InsertGameElement,
+  type ExportJob,
+  type ExportFormat,
+} from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getGame(id: number): Promise<Game | undefined>;
@@ -8,6 +18,16 @@ export interface IStorage {
   updateGame(id: number, game: Partial<Game>): Promise<Game | undefined>;
   getAllGames(): Promise<Game[]>;
   getGameElements(): Promise<GameElementModel[]>;
+  createExportJob(job: {
+    gameId: number | null;
+    format: ExportFormat;
+    fileName: string;
+    mimeType: string;
+  }): Promise<ExportJob>;
+  completeExportJob(id: number, fileData: string): Promise<ExportJob | undefined>;
+  failExportJob(id: number, errorMessage: string): Promise<ExportJob | undefined>;
+  getExportJob(id: number): Promise<ExportJob | undefined>;
+  listExportJobs(gameId: number, limit?: number): Promise<ExportJob[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -54,6 +74,57 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(gameElements);
     }
     return elements;
+  }
+
+  async createExportJob(job: {
+    gameId: number | null;
+    format: ExportFormat;
+    fileName: string;
+    mimeType: string;
+  }): Promise<ExportJob> {
+    const [created] = await db
+      .insert(exportJobs)
+      .values({
+        gameId: job.gameId,
+        format: job.format,
+        fileName: job.fileName,
+        mimeType: job.mimeType,
+        status: "processing",
+      })
+      .returning();
+    return created;
+  }
+
+  async completeExportJob(id: number, fileData: string): Promise<ExportJob | undefined> {
+    const [updated] = await db
+      .update(exportJobs)
+      .set({ status: "completed", fileData, completedAt: new Date() })
+      .where(eq(exportJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async failExportJob(id: number, errorMessage: string): Promise<ExportJob | undefined> {
+    const [updated] = await db
+      .update(exportJobs)
+      .set({ status: "failed", errorMessage, completedAt: new Date() })
+      .where(eq(exportJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getExportJob(id: number): Promise<ExportJob | undefined> {
+    const [job] = await db.select().from(exportJobs).where(eq(exportJobs.id, id));
+    return job || undefined;
+  }
+
+  async listExportJobs(gameId: number, limit = 20): Promise<ExportJob[]> {
+    return await db
+      .select()
+      .from(exportJobs)
+      .where(eq(exportJobs.gameId, gameId))
+      .orderBy(desc(exportJobs.createdAt))
+      .limit(limit);
   }
 }
 

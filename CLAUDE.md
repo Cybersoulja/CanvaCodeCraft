@@ -118,7 +118,10 @@ npm run db:push
 | POST | `/api/games` | Create new game |
 | PATCH | `/api/games/:id` | Update game |
 | GET | `/api/elements` | Get game element library |
-| POST | `/api/export/zip` | Generate ZIP export |
+| POST | `/api/exports` | Create an export job (json/ink/html complete immediately, zip processes in the background) |
+| GET | `/api/exports/:id` | Get export job status |
+| GET | `/api/exports/:id/download` | Download a completed export's file |
+| GET | `/api/games/:gameId/exports` | List export history for a game |
 
 ## Database Schema
 
@@ -136,6 +139,20 @@ gameElements {
   id: serial (primary key)
   type: text ("button" | "text" | "image")
   properties: jsonb (ElementProperties)
+}
+
+// Export jobs table (export history + async zip processing)
+exportJobs {
+  id: serial (primary key)
+  gameId: integer (nullable)
+  format: text ("json" | "ink" | "html" | "zip")
+  status: text ("pending" | "processing" | "completed" | "failed")
+  fileName: text
+  mimeType: text
+  fileData: text (base64, set once completed)
+  errorMessage: text (nullable)
+  createdAt: timestamp
+  completedAt: timestamp (nullable)
 }
 ```
 

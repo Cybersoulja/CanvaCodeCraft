@@ -1,10 +1,17 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, FileCode, FileJson, FileArchive, Globe } from "lucide-react";
-import { GameElement, Scene } from "@shared/schema";
+import { Download, FileCode, FileJson, FileArchive, Globe, Loader2, AlertCircle } from "lucide-react";
+import { GameElement, Scene, ExportFormat, ExportJob } from "@shared/schema";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+type ExportJobSummary = Omit<ExportJob, "fileData">;
+
+const POLL_INTERVAL_MS = 500;
+const POLL_TIMEOUT_MS = 20000;
 
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
@@ -27,31 +34,75 @@ interface ExportDialogProps {
   inkScript: string;
   scenes: Scene[];
   gameName?: string;
+  gameId?: number;
 }
 
-export default function ExportDialog({ 
-  open, 
-  onOpenChange, 
-  inkScript, 
+export default function ExportDialog({
+  open,
+  onOpenChange,
+  inkScript,
   scenes,
-  gameName = "my-game"
+  gameName = "my-game",
+  gameId
 }: ExportDialogProps) {
   const [exporting, setExporting] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const downloadFile = (content: string, filename: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType });
+  const historyQueryKey = [`/api/games/${gameId}/exports`];
+  const { data: exportHistory = [] } = useQuery<ExportJobSummary[]>({
+    queryKey: historyQueryKey,
+    enabled: !!gameId && open,
+  });
+
+  const pollExportJob = async (id: number): Promise<ExportJobSummary> => {
+    const start = Date.now();
+    while (Date.now() - start < POLL_TIMEOUT_MS) {
+      const res = await apiRequest("GET", `/api/exports/${id}`);
+      const job: ExportJobSummary = await res.json();
+      if (job.status === "completed" || job.status === "failed") return job;
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+    throw new Error("Export timed out");
+  };
+
+  const downloadJob = async (job: ExportJobSummary) => {
+    const res = await fetch(`/api/exports/${job.id}/download`);
+    if (!res.ok) throw new Error("Failed to download export");
+    const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = filename;
+    link.download = job.fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const exportAsJSON = () => {
+  const submitExport = async (
+    format: ExportFormat,
+    payload: { content?: string; files?: Record<string, string> }
+  ) => {
+    const res = await apiRequest("POST", "/api/exports", {
+      gameId,
+      format,
+      gameName,
+      ...payload,
+    });
+    let job: ExportJobSummary = await res.json();
+    if (job.status === "processing") {
+      job = await pollExportJob(job.id);
+    }
+    if (gameId) {
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+    }
+    if (job.status === "failed") {
+      throw new Error(job.errorMessage || "Export failed");
+    }
+    await downloadJob(job);
+  };
+
+  const exportAsJSON = async () => {
     setExporting('json');
     try {
       const gameData = {
@@ -65,7 +116,7 @@ export default function ExportDialog({
           elements: scene.elements
         }))
       };
-      downloadFile(JSON.stringify(gameData, null, 2), `${gameName}.json`, 'application/json');
+      await submitExport('json', { content: JSON.stringify(gameData, null, 2) });
       toast({
         title: "Export successful",
         description: "Game exported as JSON file"
@@ -80,10 +131,10 @@ export default function ExportDialog({
     setExporting(null);
   };
 
-  const exportAsInk = () => {
+  const exportAsInk = async () => {
     setExporting('ink');
     try {
-      downloadFile(inkScript, `${gameName}.ink`, 'text/plain');
+      await submitExport('ink', { content: inkScript });
       toast({
         title: "Export successful",
         description: "Ink script exported"
@@ -298,11 +349,10 @@ export default function ExportDialog({
 </html>`;
   };
 
-  const exportAsHTML = () => {
+  const exportAsHTML = async () => {
     setExporting('html');
     try {
-      const html = generateStandaloneHTML();
-      downloadFile(html, `${gameName}.html`, 'text/html');
+      await submitExport('html', { content: generateStandaloneHTML() });
       toast({
         title: "Export successful",
         description: "Standalone HTML game exported"
@@ -354,25 +404,7 @@ ${new Date().toLocaleDateString()}
         'README.md': readme
       };
 
-      const response = await fetch('/api/export/zip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files, gameName })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create ZIP file');
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${gameName}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      await submitExport('zip', { files });
 
       toast({
         title: "Export successful",
@@ -455,6 +487,50 @@ ${new Date().toLocaleDateString()}
             </Card>
           ))}
         </div>
+
+        {gameId && exportHistory.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-sm font-medium mb-2">Recent Exports</h4>
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {exportHistory.map(job => {
+                const option = exportOptions.find(o => o.id === job.format);
+                const Icon = option?.icon ?? FileJson;
+                return (
+                  <div
+                    key={job.id}
+                    className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{job.fileName}</span>
+                      <span className="text-muted-foreground shrink-0">
+                        {new Date(job.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    {job.status === "completed" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2"
+                        onClick={() => downloadJob(job).catch(() =>
+                          toast({ title: "Download failed", variant: "destructive" })
+                        )}
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {(job.status === "pending" || job.status === "processing") && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+                    )}
+                    {job.status === "failed" && (
+                      <AlertCircle className="h-3 w-3 text-destructive shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

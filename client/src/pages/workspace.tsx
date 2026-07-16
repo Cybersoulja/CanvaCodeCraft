@@ -199,6 +199,7 @@ export default function Workspace() {
           inkScript={inkCode}
           scenes={scenes}
           gameName={currentGame?.name || "my-game"}
+          gameId={currentGame?.id}
         />
       </div>
     </DndProvider>
