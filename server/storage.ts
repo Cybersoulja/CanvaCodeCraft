@@ -2,12 +2,16 @@ import {
   games,
   gameElements,
   exportJobs,
+  canvaConnections,
+  canvaAssets,
   type Game,
   type GameElementModel,
   type InsertGame,
   type InsertGameElement,
   type ExportJob,
   type ExportFormat,
+  type CanvaConnection,
+  type CanvaAsset,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray } from "drizzle-orm";
@@ -30,6 +34,22 @@ export interface IStorage {
   listExportJobs(gameId: number, limit?: number): Promise<ExportJob[]>;
   /** Marks jobs left in pending/processing by a prior process (e.g. a restart mid-export) as failed. */
   recoverInterruptedExportJobs(): Promise<void>;
+  getCanvaConnection(): Promise<CanvaConnection | undefined>;
+  saveCanvaConnection(connection: {
+    accessToken: string;
+    refreshToken: string;
+    scope: string;
+    expiresAt: Date;
+    canvaUserId?: string | null;
+  }): Promise<CanvaConnection>;
+  clearCanvaConnection(): Promise<void>;
+  createCanvaAsset(asset: {
+    canvaAssetId: string;
+    name: string;
+    mimeType: string;
+    fileData: string;
+  }): Promise<CanvaAsset>;
+  getCanvaAsset(id: number): Promise<CanvaAsset | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -138,6 +158,50 @@ export class DatabaseStorage implements IStorage {
         completedAt: new Date(),
       })
       .where(inArray(exportJobs.status, ["pending", "processing"]));
+  }
+
+  async getCanvaConnection(): Promise<CanvaConnection | undefined> {
+    const [connection] = await db.select().from(canvaConnections).limit(1);
+    return connection || undefined;
+  }
+
+  async saveCanvaConnection(connection: {
+    accessToken: string;
+    refreshToken: string;
+    scope: string;
+    expiresAt: Date;
+    canvaUserId?: string | null;
+  }): Promise<CanvaConnection> {
+    const existing = await this.getCanvaConnection();
+    if (existing) {
+      const [updated] = await db
+        .update(canvaConnections)
+        .set(connection)
+        .where(eq(canvaConnections.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(canvaConnections).values(connection).returning();
+    return created;
+  }
+
+  async clearCanvaConnection(): Promise<void> {
+    await db.delete(canvaConnections);
+  }
+
+  async createCanvaAsset(asset: {
+    canvaAssetId: string;
+    name: string;
+    mimeType: string;
+    fileData: string;
+  }): Promise<CanvaAsset> {
+    const [created] = await db.insert(canvaAssets).values(asset).returning();
+    return created;
+  }
+
+  async getCanvaAsset(id: number): Promise<CanvaAsset | undefined> {
+    const [asset] = await db.select().from(canvaAssets).where(eq(canvaAssets.id, id));
+    return asset || undefined;
   }
 }
 

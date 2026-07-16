@@ -122,6 +122,13 @@ npm run db:push
 | GET | `/api/exports/:id` | Get export job status |
 | GET | `/api/exports/:id/download` | Download a completed export's file |
 | GET | `/api/games/:gameId/exports` | List export history for a game |
+| GET | `/api/canva/status` | Whether the Canva integration is connected |
+| GET | `/api/canva/oauth/start` | Redirects to Canva's OAuth consent screen |
+| GET | `/api/canva/oauth/callback` | OAuth redirect target; exchanges the code for tokens |
+| POST | `/api/canva/disconnect` | Clears the stored Canva connection |
+| GET | `/api/canva/assets` | Browse a Canva folder for images (`?folder=root\|<folderId>`) |
+| POST | `/api/canva/assets/:assetId/import` | Downloads a Canva asset and persists it locally |
+| GET | `/api/canva/imported/:id` | Serves a previously imported Canva asset's image bytes |
 
 ## Database Schema
 
@@ -154,6 +161,28 @@ exportJobs {
   createdAt: timestamp
   completedAt: timestamp (nullable)
 }
+
+// Canva OAuth connection (single row - no multi-user auth exists yet)
+canvaConnections {
+  id: serial (primary key)
+  accessToken: text
+  refreshToken: text
+  scope: text
+  expiresAt: timestamp
+  canvaUserId: text (nullable)
+  connectedAt: timestamp
+}
+
+// Imported Canva assets (downloaded once since Canva's thumbnail URLs
+// expire after ~15 minutes; served back via /api/canva/imported/:id)
+canvaAssets {
+  id: serial (primary key)
+  canvaAssetId: text
+  name: text
+  mimeType: text
+  fileData: text (base64)
+  importedAt: timestamp
+}
 ```
 
 ## Environment Variables
@@ -161,6 +190,17 @@ exportJobs {
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `DATABASE_URL` | PostgreSQL connection string (Neon) | Yes |
+| `CANVA_CLIENT_ID` | Canva integration's Client ID (Developer Portal → your integration → Configuration) | Only for Canva asset import |
+| `CANVA_CLIENT_SECRET` | Canva integration's Client Secret | Only for Canva asset import |
+| `CANVA_REDIRECT_URI` | Overrides the auto-computed OAuth redirect URI (`<request origin>/api/canva/oauth/callback`). Set this if the app runs behind a proxy that changes the scheme/host Express sees. | No |
+
+### Setting up the Canva integration
+1. In the [Canva Developer Portal](https://www.canva.com/developers/), open your integration's **Configuration** and set scopes to `asset:read` and `folder:read`.
+2. Under **Authentication**, add a redirect URI for each environment you'll use:
+   - Local dev: `http://localhost:5000/api/canva/oauth/callback`
+   - Production: `https://<your-deployed-domain>/api/canva/oauth/callback`
+3. Copy the Client ID and Client Secret into `CANVA_CLIENT_ID` / `CANVA_CLIENT_SECRET` in your deployment's environment/secrets (not committed to the repo).
+4. Click "Connect Canva" in the app header to start the OAuth flow.
 
 ## Code Conventions
 

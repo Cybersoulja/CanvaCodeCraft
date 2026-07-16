@@ -28,6 +28,30 @@ export const exportJobs = pgTable("export_jobs", {
   completedAt: timestamp("completed_at"),
 });
 
+// Single-row table: this app has no multi-user auth yet, so the Canva
+// OAuth connection is one shared connection for the whole instance.
+export const canvaConnections = pgTable("canva_connections", {
+  id: serial("id").primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  scope: text("scope").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  canvaUserId: text("canva_user_id"),
+  connectedAt: timestamp("connected_at").notNull().defaultNow(),
+});
+
+// Canva asset thumbnail URLs expire after ~15 minutes, so imported
+// assets are downloaded once and persisted here (same pattern as
+// exportJobs.fileData) rather than storing the short-lived URL.
+export const canvaAssets = pgTable("canva_assets", {
+  id: serial("id").primaryKey(),
+  canvaAssetId: text("canva_asset_id").notNull(),
+  name: text("name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileData: text("file_data").notNull(), // base64-encoded image bytes
+  importedAt: timestamp("imported_at").notNull().defaultNow(),
+});
+
 export type Scene = {
   id: string;
   name: string;
@@ -65,3 +89,8 @@ export type ExportFormat = "json" | "ink" | "html" | "zip";
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";
 export type ExportJob = typeof exportJobs.$inferSelect;
 export type NewExportJob = typeof exportJobs.$inferInsert;
+
+export type CanvaConnection = typeof canvaConnections.$inferSelect;
+export type NewCanvaConnection = typeof canvaConnections.$inferInsert;
+export type CanvaAsset = typeof canvaAssets.$inferSelect;
+export type NewCanvaAsset = typeof canvaAssets.$inferInsert;

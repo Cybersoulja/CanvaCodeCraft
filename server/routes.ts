@@ -1,8 +1,20 @@
-import { Express } from "express";
+import { Express, Response } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
 import { insertGameSchema, type ExportFormat, type ExportJob } from "@shared/schema";
 import archiver from "archiver";
+import {
+  beginAuthorization,
+  consumePendingAuth,
+  resolveRedirectUri,
+  exchangeCodeForToken,
+  refreshAccessToken,
+  listFolderItems,
+  getAsset,
+  downloadBinary,
+  CanvaConfigError,
+  CanvaApiError,
+} from "./canva";
 
 const EXPORT_FORMATS: ExportFormat[] = ["json", "ink", "html", "zip"];
 const MAX_EXPORT_SIZE = 5 * 1024 * 1024; // 5MB
@@ -33,6 +45,44 @@ function buildZipBuffer(files: Record<string, string>): Promise<Buffer> {
 function jobSummary(job: ExportJob) {
   const { fileData, ...summary } = job;
   return summary;
+}
+
+class CanvaNotConnectedError extends Error {}
+
+async function getValidCanvaAccessToken(): Promise<string> {
+  const connection = await storage.getCanvaConnection();
+  if (!connection) {
+    throw new CanvaNotConnectedError("Canva is not connected");
+  }
+  const msUntilExpiry = connection.expiresAt.getTime() - Date.now();
+  if (msUntilExpiry > 60_000) {
+    return connection.accessToken;
+  }
+  const refreshed = await refreshAccessToken(connection.refreshToken);
+  const updated = await storage.saveCanvaConnection({
+    accessToken: refreshed.access_token,
+    refreshToken: refreshed.refresh_token,
+    scope: refreshed.scope,
+    expiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+    canvaUserId: connection.canvaUserId,
+  });
+  return updated.accessToken;
+}
+
+function handleCanvaError(res: Response, err: unknown) {
+  if (err instanceof CanvaNotConnectedError) {
+    res.status(409).json({ message: err.message });
+    return;
+  }
+  if (err instanceof CanvaConfigError) {
+    res.status(500).json({ message: err.message });
+    return;
+  }
+  if (err instanceof CanvaApiError) {
+    res.status(502).json({ message: err.message });
+    return;
+  }
+  res.status(500).json({ message: "Canva request failed" });
 }
 
 export function registerRoutes(app: Express) {
@@ -211,6 +261,140 @@ export function registerRoutes(app: Express) {
         res.status(500).json({ message: "Failed to create export" });
       }
     }
+  });
+
+  // Canva connection status
+  router.get("/api/canva/status", async (req, res) => {
+    const connection = await storage.getCanvaConnection();
+    if (!connection) {
+      res.json({ connected: false });
+      return;
+    }
+    res.json({
+      connected: true,
+      scope: connection.scope,
+      connectedAt: connection.connectedAt,
+      expiresAt: connection.expiresAt,
+    });
+  });
+
+  // Redirects the browser to Canva's OAuth consent screen
+  router.get("/api/canva/oauth/start", (req, res) => {
+    try {
+      const redirectUri = resolveRedirectUri(req);
+      const { url } = beginAuthorization(redirectUri);
+      res.redirect(url);
+    } catch (err) {
+      res.status(500).send(err instanceof Error ? err.message : "Failed to start Canva authorization");
+    }
+  });
+
+  // Canva redirects back here with an authorization code
+  router.get("/api/canva/oauth/callback", async (req, res) => {
+    const { code, state, error } = req.query;
+    if (error) {
+      res.redirect(`/?canva=error&reason=${encodeURIComponent(String(error))}`);
+      return;
+    }
+    if (typeof code !== "string" || typeof state !== "string") {
+      res.redirect("/?canva=error&reason=missing_code");
+      return;
+    }
+    const pending = consumePendingAuth(state);
+    if (!pending) {
+      res.redirect("/?canva=error&reason=invalid_state");
+      return;
+    }
+    try {
+      const redirectUri = resolveRedirectUri(req);
+      const token = await exchangeCodeForToken(code, pending.codeVerifier, redirectUri);
+      await storage.saveCanvaConnection({
+        accessToken: token.access_token,
+        refreshToken: token.refresh_token,
+        scope: token.scope,
+        expiresAt: new Date(Date.now() + token.expires_in * 1000),
+      });
+      res.redirect("/?canva=connected");
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "token_exchange_failed";
+      res.redirect(`/?canva=error&reason=${encodeURIComponent(reason)}`);
+    }
+  });
+
+  router.post("/api/canva/disconnect", async (req, res) => {
+    await storage.clearCanvaConnection();
+    res.json({ connected: false });
+  });
+
+  // Browse a Canva folder for images (default: the user's top-level projects)
+  router.get("/api/canva/assets", async (req, res) => {
+    try {
+      const accessToken = await getValidCanvaAccessToken();
+      const folderId = typeof req.query.folder === "string" ? req.query.folder : "root";
+      const continuation = typeof req.query.continuation === "string" ? req.query.continuation : undefined;
+      const data = await listFolderItems(accessToken, folderId, continuation);
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      const folders = items
+        .filter((item: any) => item.type === "folder" && item.folder)
+        .map((item: any) => ({ id: item.folder.id, name: item.folder.name }));
+
+      const images = items
+        .filter((item: any) => item.type === "image" && item.image)
+        .map((item: any) => ({
+          id: item.image.id,
+          name: item.image.name,
+          thumbnailUrl: item.image.thumbnail?.url ?? null,
+        }));
+
+      res.json({ folders, images, continuation: data.continuation ?? null });
+    } catch (err) {
+      handleCanvaError(res, err);
+    }
+  });
+
+  // Downloads a Canva asset's image content and persists it locally, since
+  // Canva's thumbnail URLs expire after ~15 minutes and can't be stored
+  // directly as a GameElement's imageUrl.
+  router.post("/api/canva/assets/:assetId/import", async (req, res) => {
+    try {
+      const accessToken = await getValidCanvaAccessToken();
+      const assetId = req.params.assetId;
+      const assetData = await getAsset(accessToken, assetId);
+      const asset = assetData.asset ?? assetData;
+      const thumbnailUrl = asset?.thumbnail?.url;
+      if (!thumbnailUrl) {
+        res.status(502).json({ message: "Canva asset has no downloadable thumbnail" });
+        return;
+      }
+      const { buffer, contentType } = await downloadBinary(thumbnailUrl);
+      const saved = await storage.createCanvaAsset({
+        canvaAssetId: assetId,
+        name: asset?.name || "canva-asset",
+        mimeType: contentType,
+        fileData: buffer.toString("base64"),
+      });
+      res.status(201).json({ id: saved.id, name: saved.name, url: `/api/canva/imported/${saved.id}` });
+    } catch (err) {
+      handleCanvaError(res, err);
+    }
+  });
+
+  // Serves a previously imported Canva asset's image bytes
+  router.get("/api/canva/imported/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ message: "Invalid asset id" });
+      return;
+    }
+    const asset = await storage.getCanvaAsset(id);
+    if (!asset) {
+      res.status(404).json({ message: "Asset not found" });
+      return;
+    }
+    res.setHeader("Content-Type", asset.mimeType);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.send(Buffer.from(asset.fileData, "base64"));
   });
 
   return createServer(app);
