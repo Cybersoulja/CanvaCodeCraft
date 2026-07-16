@@ -256,10 +256,29 @@ canvaAssets {
 4. `components/preview/index.tsx` - Ink story execution
 
 ## Testing Approach
-This project does not have a test suite. When adding tests:
-- Use Vitest (compatible with Vite)
-- Place tests alongside source files or in `__tests__` directories
-- Test Ink parsing utilities in isolation
+Tests use Vitest, configured in `vitest.config.ts`.
+
+```bash
+npm test          # run once
+npm run test:watch
+```
+
+- Place `*.test.ts`/`*.test.tsx` files alongside the source they cover.
+- Client component tests use `@testing-library/react` under the default `jsdom` environment.
+- Server-side test files that don't touch the DOM should opt into the `node`
+  environment with a `// @vitest-environment node` comment at the top of the
+  file (see `server/canva.test.ts`) rather than adding more entries to a
+  global environment-matching config.
+- `storage.ts` isn't unit-tested yet — it imports the Neon `db` singleton
+  directly rather than accepting an injectable database, so exercising it
+  currently means pointing `DATABASE_URL` at a real (or local) Postgres
+  instance, as was done manually to verify the export-jobs and Canva
+  features. Making it testable in-process would mean refactoring
+  `DatabaseStorage` to accept the drizzle instance via constructor
+  injection (e.g. defaulting to the production singleton, overridable with
+  an in-memory Postgres like `@electric-sql/pglite` in tests) — a real
+  design decision, not done as a drive-by.
+- Test Ink parsing utilities in isolation (see `client/src/lib/ink-utils.test.ts`).
 
 ## Security Considerations
 - ZIP export validates filenames against allowlist
