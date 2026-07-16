@@ -24,6 +24,7 @@ export default function Workspace() {
   const [scenes, setScenes] = useState<Scene[]>([
     { id: "1", name: "Start Scene", elements: [] }
   ]);
+  const [currentSceneId, setCurrentSceneId] = useState("1");
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -36,6 +37,13 @@ export default function Workspace() {
     const identifiers = extractInkIdentifiers(inkCode);
     setInkVariables(identifiers);
   }, [inkCode]);
+
+  // The selected element belongs to whichever scene was showing when it was
+  // clicked; switching scenes should clear it rather than leave the
+  // Properties panel pointing at an element that's no longer in view.
+  useEffect(() => {
+    setSelectedElement(null);
+  }, [currentSceneId]);
 
   const { data: games } = useQuery<Game[]>({
     queryKey: ["/api/games"],
@@ -157,7 +165,11 @@ export default function Workspace() {
 
             {/* Main canvas area */}
             <ResizablePanel defaultSize={55}>
-              <Canvas 
+              <Canvas
+                scenes={scenes}
+                currentSceneId={currentSceneId}
+                onSceneChange={setCurrentSceneId}
+                onScenesChange={setScenes}
                 onSelectElement={setSelectedElement}
               />
             </ResizablePanel>
