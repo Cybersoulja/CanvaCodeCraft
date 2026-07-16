@@ -3,8 +3,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { GameElement } from "@shared/schema";
 import { useState, useEffect } from "react";
+import { ImageDown } from "lucide-react";
+import CanvaAssetPickerDialog from "@/components/canva/asset-picker-dialog";
 
 interface PropertiesProps {
   selectedElement: GameElement | null;
@@ -18,6 +21,7 @@ export default function Properties({
   onElementUpdate
 }: PropertiesProps) {
   const [element, setElement] = useState<GameElement | null>(null);
+  const [showCanvaPicker, setShowCanvaPicker] = useState(false);
 
   useEffect(() => {
     setElement(selectedElement);
@@ -179,9 +183,24 @@ export default function Properties({
           {element.type === "image" && (
             <div className="space-y-2">
               <Label>Image URL</Label>
-              <Input 
+              <Input
                 value={element.properties.imageUrl || ""}
                 onChange={(e) => handleChange('properties.imageUrl', e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowCanvaPicker(true)}
+              >
+                <ImageDown className="h-4 w-4 mr-1" />
+                Import from Canva
+              </Button>
+              <CanvaAssetPickerDialog
+                open={showCanvaPicker}
+                onOpenChange={setShowCanvaPicker}
+                onSelect={(imageUrl) => handleChange('properties.imageUrl', imageUrl)}
               />
             </div>
           )}

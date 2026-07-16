@@ -9,6 +9,7 @@ import Properties from "@/components/properties";
 import Editor from "@/components/editor";
 import Preview from "@/components/preview";
 import ExportDialog from "@/components/export";
+import CanvaConnectButton from "@/components/canva/connect-button";
 import { useState, useEffect } from "react";
 import { GameElement, Scene, Game } from "@shared/schema";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -129,6 +130,7 @@ export default function Workspace() {
         <header className="h-14 border-b flex items-center justify-between px-4 bg-background">
           <h1 className="text-xl font-bold">Ink Game Creator</h1>
           <div className="flex gap-2">
+            <CanvaConnectButton />
             <Button variant="outline" size="sm" onClick={handlePlayGame}>
               <Play className="h-4 w-4 mr-1" />
               Preview
@@ -199,6 +201,7 @@ export default function Workspace() {
           inkScript={inkCode}
           scenes={scenes}
           gameName={currentGame?.name || "my-game"}
+          gameId={currentGame?.id}
         />
       </div>
     </DndProvider>

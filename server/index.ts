@@ -1,10 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { storage } from "./storage";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Raised from Express's ~100KB default so exported game content
+// (up to MAX_EXPORT_SIZE per file, aggregated across a ZIP's files
+// in server/routes.ts) doesn't get rejected by the body parser
+// before it reaches export validation.
+app.use(express.json({ limit: "60mb" }));
+app.use(express.urlencoded({ extended: false, limit: "60mb" }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -37,6 +42,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await storage.recoverInterruptedExportJobs();
+
   const server = registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

@@ -40,13 +40,31 @@ function DraggableElement({ element }: { element: GameElementModel }) {
   );
 }
 
+function DraggableImage({ url }: { url: string }) {
+  const [{ isDragging }, dragRef] = useDrag({
+    type: "game-element",
+    item: { type: "image", properties: { imageUrl: url } },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  return (
+    <Card
+      ref={dragRef}
+      className="cursor-move aspect-square"
+      style={{ opacity: isDragging ? 0.5 : 1 }}
+    >
+      <img src={url} alt="UI Element" className="w-full h-full object-cover" />
+    </Card>
+  );
+}
+
 function ImageLibrary() {
   return (
     <div className="grid grid-cols-2 gap-2 p-2">
       {GAME_UI_IMAGES.map((url, i) => (
-        <Card key={i} className="cursor-move aspect-square">
-          <img src={url} alt="UI Element" className="w-full h-full object-cover" />
-        </Card>
+        <DraggableImage key={i} url={url} />
       ))}
     </div>
   );
