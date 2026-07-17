@@ -1,7 +1,7 @@
 import { useDrop } from "react-dnd";
 import { GameElement, Scene } from "@shared/schema";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, generateId } from "@/lib/utils";
 import { addElementToScene } from "@/lib/scene-utils";
 
 interface CanvasProps {
@@ -23,7 +23,7 @@ export default function Canvas({
 
   const addScene = () => {
     const newScene: Scene = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: `Scene ${scenes.length + 1}`,
       elements: [],
     };
@@ -37,7 +37,7 @@ export default function Canvas({
       if (!offset) return;
 
       const element: GameElement = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         type: item.type,
         x: offset.x,
         y: offset.y,
