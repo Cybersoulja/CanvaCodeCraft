@@ -11,5 +11,7 @@ export function generateId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return Math.random().toString(36).substring(2, 15);
+  // Date.now() prefix guards against Math.random() producing a very short
+  // (or, for 0, empty) string; these ids are used as React keys.
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
 }
