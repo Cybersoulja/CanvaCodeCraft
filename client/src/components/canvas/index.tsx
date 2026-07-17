@@ -2,32 +2,33 @@ import { useDrop } from "react-dnd";
 import { GameElement, Scene } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { addElementToScene } from "@/lib/scene-utils";
 
 interface CanvasProps {
+  scenes: Scene[];
+  currentSceneId: string;
+  onSceneChange: (sceneId: string) => void;
+  onScenesChange: (scenes: Scene[]) => void;
   onSelectElement: (element: GameElement | null) => void;
 }
 
-export default function Canvas({ onSelectElement }: CanvasProps) {
-  const [scenes, setScenes] = useState<Scene[]>([
-    { id: "1", name: "Start Scene", elements: [] }
-  ]);
-  const [currentSceneId, setCurrentSceneId] = useState("1");
-  const [elements, setElements] = useState<GameElement[]>([]);
+export default function Canvas({
+  scenes,
+  currentSceneId,
+  onSceneChange,
+  onScenesChange,
+  onSelectElement,
+}: CanvasProps) {
+  const elements = scenes.find((scene) => scene.id === currentSceneId)?.elements ?? [];
 
   const addScene = () => {
-    const newScene = {
+    const newScene: Scene = {
       id: crypto.randomUUID(),
       name: `Scene ${scenes.length + 1}`,
-      elements: []
+      elements: [],
     };
-    setScenes([...scenes, newScene]);
+    onScenesChange([...scenes, newScene]);
   };
-
-  useEffect(() => {
-    const currentScene = scenes.find(s => s.id === currentSceneId);
-    setElements(currentScene?.elements || []);
-  }, [currentSceneId, scenes]);
 
   const [{ isOver }, dropRef] = useDrop({
     accept: "game-element",
@@ -45,20 +46,7 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
         properties: item.properties,
       };
 
-      setElements([...elements, element]);
-
-      // Update the scene with the new element
-      const updatedScenes = scenes.map(scene => {
-        if (scene.id === currentSceneId) {
-          return {
-            ...scene,
-            elements: [...scene.elements, element]
-          };
-        }
-        return scene;
-      });
-
-      setScenes(updatedScenes);
+      onScenesChange(addElementToScene(scenes, currentSceneId, element));
     },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
@@ -68,9 +56,9 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 p-2 border-b">
-        <select 
+        <select
           value={currentSceneId}
-          onChange={(e) => setCurrentSceneId(e.target.value)}
+          onChange={(e) => onSceneChange(e.target.value)}
           className="p-1 rounded border"
         >
           {scenes.map(scene => (
@@ -88,7 +76,7 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
       </div>
 
       <div className="flex-1 relative overflow-hidden" ref={dropRef}>
-        <div 
+        <div
           className={cn(
             "w-full h-full bg-background",
             isOver && "bg-accent/20"
@@ -124,8 +112,8 @@ export default function Canvas({ onSelectElement }: CanvasProps) {
                 </button>
               )}
               {element.type === "image" && (
-                <img 
-                  src={element.properties.imageUrl} 
+                <img
+                  src={element.properties.imageUrl}
                   alt="Game element"
                   className="w-full h-full object-cover"
                 />
