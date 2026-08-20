@@ -4,6 +4,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery } from "@tanstack/react-query";
 import { GameElementModel } from "@shared/schema";
 
+type CanvaAppDesign = {
+  id: number;
+  name: string;
+  url: string;
+  importedAt: string;
+};
+
 const GAME_UI_IMAGES = [
   "https://images.unsplash.com/photo-1486572788966-cfd3df1f5b42",
   "https://images.unsplash.com/photo-1594652634010-275456c808d0",
@@ -71,8 +78,11 @@ function ImageLibrary() {
 }
 
 export default function Library() {
-  const { data: elements } = useQuery<GameElementModel[]>({ 
+  const { data: elements } = useQuery<GameElementModel[]>({
     queryKey: ["/api/elements"],
+  });
+  const { data: canvaAppDesigns } = useQuery<CanvaAppDesign[]>({
+    queryKey: ["/api/canva-app/designs"],
   });
 
   return (
@@ -90,6 +100,17 @@ export default function Library() {
 
           <h3 className="text-sm font-medium mb-2 mt-4">Images</h3>
           <ImageLibrary />
+
+          {canvaAppDesigns && canvaAppDesigns.length > 0 && (
+            <>
+              <h3 className="text-sm font-medium mb-2 mt-4">From Canva App</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {canvaAppDesigns.map((design) => (
+                  <DraggableImage key={design.id} url={design.url} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </ScrollArea>
     </div>

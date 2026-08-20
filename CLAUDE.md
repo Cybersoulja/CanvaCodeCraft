@@ -67,6 +67,8 @@ CanvaCodeCraft/
 │   └── vite.ts               # Vite dev server integration
 ├── shared/
 │   └── schema.ts             # Shared types and Drizzle schema
+├── canva-app/                  # Standalone Canva App (separate package.json, own build)
+│   └── src/intents/design_editor/app.tsx  # "Send to CanvaCodeCraft" button
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
@@ -129,6 +131,8 @@ npm run db:push
 | GET | `/api/canva/assets` | Browse a Canva folder for images (`?folder=root\|<folderId>`) |
 | POST | `/api/canva/assets/:assetId/import` | Downloads a Canva asset and persists it locally |
 | GET | `/api/canva/imported/:id` | Serves a previously imported Canva asset's image bytes |
+| POST | `/api/canva-app/designs` | Receives a design pushed from the companion Canva App (see `canva-app/`); gated by `CANVA_APP_SHARED_SECRET`, CORS-enabled since it's called from the Canva editor iframe |
+| GET | `/api/canva-app/designs` | Lists designs pushed from the Canva App, for the Library panel's "From Canva App" section |
 
 ## Database Schema
 
@@ -174,13 +178,16 @@ canvaConnections {
 }
 
 // Imported Canva assets (downloaded once since Canva's thumbnail URLs
-// expire after ~15 minutes; served back via /api/canva/imported/:id)
+// expire after ~15 minutes; served back via /api/canva/imported/:id).
+// Also holds designs pushed from the companion Canva App
+// (source: "app_push") alongside Connect-API imports (source: "import").
 canvaAssets {
   id: serial (primary key)
   canvaAssetId: text
   name: text
   mimeType: text
   fileData: text (base64)
+  source: text ("import" | "app_push", default "import")
   importedAt: timestamp
 }
 ```
@@ -193,6 +200,7 @@ canvaAssets {
 | `CANVA_CLIENT_ID` | Canva integration's Client ID (Developer Portal → your integration → Configuration) | Only for Canva asset import |
 | `CANVA_CLIENT_SECRET` | Canva integration's Client Secret | Only for Canva asset import |
 | `CANVA_REDIRECT_URI` | Overrides the auto-computed OAuth redirect URI (`<request origin>/api/canva/oauth/callback`). Set this if the app runs behind a proxy that changes the scheme/host Express sees. | No |
+| `CANVA_APP_SHARED_SECRET` | Shared secret that the companion Canva App (`canva-app/`) sends as `X-CanvaCodeCraft-Secret` when pushing a design to `POST /api/canva-app/designs`. Generate a random value and set the same one in `canva-app/.env`'s `CANVA_APP_SHARED_SECRET`. | Only for the Canva App design push |
 
 ### Setting up the Canva integration
 1. In the [Canva Developer Portal](https://www.canva.com/developers/), open your integration's **Configuration** and set scopes to `asset:read` and `folder:read`.
@@ -201,6 +209,19 @@ canvaAssets {
    - Production: `https://<your-deployed-domain>/api/canva/oauth/callback`
 3. Copy the Client ID and Client Secret into `CANVA_CLIENT_ID` / `CANVA_CLIENT_SECRET` in your deployment's environment/secrets (not committed to the repo).
 4. Click "Connect Canva" in the app header to start the OAuth flow.
+
+### Setting up the Canva App (design push)
+This is a separate integration from the OAuth-based asset import above: a real Canva App (`canva-app/`, scaffolded from Canva's official [starter kit](https://github.com/canva-sdks/canva-apps-sdk-starter-kit)) that runs inside the Canva editor and pushes the current design *into* CanvaCodeCraft — the reverse direction of "Import from Canva" in the Properties panel.
+
+1. In the [Canva Developer Portal](https://www.canva.com/developers/), create a new app (Apps SDK, not Connect API) and note its App ID and origin under **Settings → Security**.
+2. In `canva-app/`, copy `.env.template` to `.env` (done automatically by `npm install`'s postinstall) and set:
+   - `CANVA_BACKEND_HOST` — this CanvaCodeCraft deployment's base URL (e.g. `http://localhost:5000` for local dev, or your production URL).
+   - `CANVA_APP_SHARED_SECRET` — a random secret, matching `CANVA_APP_SHARED_SECRET` in CanvaCodeCraft's own environment (see the table above).
+   - `CANVA_APP_ORIGIN` — the app origin from step 1, if you want HMR during development.
+3. From `canva-app/`, run `npm install` then `npm start` to launch it in Canva's local development harness (see `canva-app/README.md` for the full workflow — preview, HMR, and submitting the app).
+4. Open the app inside the Canva editor, click **Send to CanvaCodeCraft**, and the exported design lands in the Library panel's "From Canva App" section.
+
+`canva-app/` is a standalone package (its own `package.json`, `node_modules`, build) — it is not part of CanvaCodeCraft's `npm run dev`/`npm run build` and is developed and deployed independently.
 
 ## Code Conventions
 
@@ -279,12 +300,20 @@ npm run test:watch
   an in-memory Postgres like `@electric-sql/pglite` in tests) — a real
   design decision, not done as a drive-by.
 - Test Ink parsing utilities in isolation (see `client/src/lib/ink-utils.test.ts`).
+- `canva-app/` has its own, separate test suite (Jest, not Vitest — set up by the
+  Canva starter kit): run `npm test` from inside `canva-app/`, not from the repo root.
 
 ## Security Considerations
 - ZIP export validates filenames against allowlist
 - HTML export escapes user content (`escapeHtml`, `escapeAttr` functions)
 - API input validation using Zod schemas
 - CORS and session handling via Express middleware
+- `POST /api/canva-app/designs` uses a single static shared secret rather than
+  per-user auth, consistent with this app's no-multi-user-auth-yet posture
+  (see `canvaConnections`' single-row comment above). This is acceptable for
+  a private/personal Canva App but is not the pattern Canva recommends for a
+  publicly published app (which should verify `auth.getCanvaUserToken()` via
+  `@canva/app-middleware`'s JWT/JWKS verification instead).
 
 ## Build & Deployment
 - Development: `npm run dev` runs both Vite and Express on port 5000

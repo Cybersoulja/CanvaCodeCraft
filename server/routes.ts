@@ -20,6 +20,8 @@ const EXPORT_FORMATS: ExportFormat[] = ["json", "ink", "html", "zip"];
 const MAX_EXPORT_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_ZIP_FILENAMES = ["game.json", "story.ink", "index.html", "README.md"];
 const MAX_ZIP_FILES = 10;
+const MAX_CANVA_APP_DESIGN_SIZE = 20 * 1024 * 1024; // 20MB
+const CANVA_APP_ALLOWED_MIME_TYPES = ["image/png", "image/jpeg"];
 
 const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
   json: "application/json",
@@ -395,6 +397,78 @@ export function registerRoutes(app: Express) {
     res.setHeader("Content-Type", asset.mimeType);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.send(Buffer.from(asset.fileData, "base64"));
+  });
+
+  // Receives a design exported from the companion Canva App (see canva-app/).
+  // Called cross-origin from inside the Canva editor iframe, so it needs its
+  // own CORS handling — unlike the rest of this API, which is same-origin.
+  // Auth is a single shared secret (CANVA_APP_SHARED_SECRET) rather than
+  // per-user tokens, matching this app's no-multi-user-auth-yet posture.
+  router.options("/api/canva-app/designs", (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-CanvaCodeCraft-Secret");
+    res.sendStatus(204);
+  });
+
+  router.post("/api/canva-app/designs", async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    const expectedSecret = process.env.CANVA_APP_SHARED_SECRET;
+    if (!expectedSecret) {
+      res.status(500).json({ message: "CANVA_APP_SHARED_SECRET is not configured on the server" });
+      return;
+    }
+    if (req.header("X-CanvaCodeCraft-Secret") !== expectedSecret) {
+      res.status(401).json({ message: "Invalid or missing shared secret" });
+      return;
+    }
+
+    const { canvaDesignId, name, mimeType, dataBase64 } = req.body ?? {};
+    if (
+      typeof canvaDesignId !== "string" ||
+      typeof name !== "string" ||
+      typeof mimeType !== "string" ||
+      typeof dataBase64 !== "string"
+    ) {
+      res.status(400).json({ message: "canvaDesignId, name, mimeType, and dataBase64 are required" });
+      return;
+    }
+    if (!CANVA_APP_ALLOWED_MIME_TYPES.includes(mimeType)) {
+      res.status(400).json({ message: `Unsupported mimeType; expected one of: ${CANVA_APP_ALLOWED_MIME_TYPES.join(", ")}` });
+      return;
+    }
+
+    const base64Payload = dataBase64.includes(",") ? dataBase64.split(",").pop()! : dataBase64;
+    const buffer = Buffer.from(base64Payload, "base64");
+    if (buffer.length === 0 || buffer.length > MAX_CANVA_APP_DESIGN_SIZE) {
+      res.status(400).json({ message: `Design data is empty or exceeds the ${MAX_CANVA_APP_DESIGN_SIZE / (1024 * 1024)}MB limit` });
+      return;
+    }
+
+    const saved = await storage.createCanvaAsset({
+      canvaAssetId: canvaDesignId,
+      name,
+      mimeType,
+      fileData: buffer.toString("base64"),
+      source: "app_push",
+    });
+    res.status(201).json({ id: saved.id, name: saved.name, url: `/api/canva/imported/${saved.id}` });
+  });
+
+  // Lists designs pushed from the Canva App, for the Library panel's "From
+  // Canva App" section. Same-origin (called from our own frontend), so no
+  // CORS/secret handling needed here.
+  router.get("/api/canva-app/designs", async (req, res) => {
+    const assets = await storage.listCanvaAssets("app_push");
+    res.json(
+      assets.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        url: `/api/canva/imported/${asset.id}`,
+        importedAt: asset.importedAt,
+      })),
+    );
   });
 
   return createServer(app);

@@ -42,13 +42,17 @@ export const canvaConnections = pgTable("canva_connections", {
 
 // Canva asset thumbnail URLs expire after ~15 minutes, so imported
 // assets are downloaded once and persisted here (same pattern as
-// exportJobs.fileData) rather than storing the short-lived URL.
+// exportJobs.fileData) rather than storing the short-lived URL. Also holds
+// designs pushed from the companion Canva App (source: "app_push"),
+// distinguished from Connect-API imports (source: "import") so the Library
+// panel can show them separately.
 export const canvaAssets = pgTable("canva_assets", {
   id: serial("id").primaryKey(),
   canvaAssetId: text("canva_asset_id").notNull(),
   name: text("name").notNull(),
   mimeType: text("mime_type").notNull(),
   fileData: text("file_data").notNull(), // base64-encoded image bytes
+  source: text("source").notNull().default("import"), // import | app_push
   importedAt: timestamp("imported_at").notNull().defaultNow(),
 });
 

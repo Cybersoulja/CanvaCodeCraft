@@ -48,8 +48,10 @@ export interface IStorage {
     name: string;
     mimeType: string;
     fileData: string;
+    source?: string;
   }): Promise<CanvaAsset>;
   getCanvaAsset(id: number): Promise<CanvaAsset | undefined>;
+  listCanvaAssets(source: string): Promise<CanvaAsset[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -194,6 +196,7 @@ export class DatabaseStorage implements IStorage {
     name: string;
     mimeType: string;
     fileData: string;
+    source?: string;
   }): Promise<CanvaAsset> {
     const [created] = await db.insert(canvaAssets).values(asset).returning();
     return created;
@@ -202,6 +205,14 @@ export class DatabaseStorage implements IStorage {
   async getCanvaAsset(id: number): Promise<CanvaAsset | undefined> {
     const [asset] = await db.select().from(canvaAssets).where(eq(canvaAssets.id, id));
     return asset || undefined;
+  }
+
+  async listCanvaAssets(source: string): Promise<CanvaAsset[]> {
+    return await db
+      .select()
+      .from(canvaAssets)
+      .where(eq(canvaAssets.source, source))
+      .orderBy(desc(canvaAssets.importedAt));
   }
 }
 
